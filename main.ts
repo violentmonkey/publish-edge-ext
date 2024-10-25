@@ -3,8 +3,8 @@
  * Author: Gerald <i@gera2ld.space>
  */
 
-import { parse } from "https://deno.land/std@0.177.0/flags/mod.ts";
-import { load } from "https://deno.land/std@0.177.0/dotenv/mod.ts";
+import { parseArgs } from "jsr:@std/cli/parse-args";
+import { load } from "jsr:@std/dotenv";
 
 const USAGE = `
 Usage:
@@ -13,16 +13,16 @@ $ ./publish-edge-addon.ts <zip-file-to-publish>
 
 Options:
 
---accessTokenUrl <accessTokenUrl>  Fall back to \`$ACCESS_TOKEN_URL\` if not provided
---clientId <clientId>              Fall back to \`$CLIENT_ID\` if not provided
---clientSecret <clientSecret>      Fall back to \`$CLIENT_SECRET\` if not provided
---productId <productId>            Fall back to \`$PRODUCT_ID\` if not provided
---notes <notes>                    Set notes for reviewers. Fall back to \`$NOTES\` if not provided
+--accessTokenUrl <accessTokenUrl>  Defaults to \`$ACCESS_TOKEN_URL\`.
+--clientId <clientId>              Defaults to \`$CLIENT_ID\`.
+--clientSecret <clientSecret>      Defaults to \`$CLIENT_SECRET\`.
+--productId <productId>            Defaults to \`$PRODUCT_ID\`.
+--notes <notes>                    Set notes for reviewers. Defaults to \`$NOTES\`.
 `;
 
 await load({ export: true });
 
-const args = parse(Deno.args);
+const args = parseArgs(Deno.args);
 
 const accessTokenUrl = args.accessTokenUrl || Deno.env.get("ACCESS_TOKEN_URL");
 const clientId = args.clientId || Deno.env.get("CLIENT_ID");
@@ -75,22 +75,27 @@ async function getToken() {
     ["client_id", clientId],
     ["client_secret", clientSecret],
   ]);
-  const res = await fetch(
-    accessTokenUrl,
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/x-www-form-urlencoded",
-      },
-      body,
+  const res = await fetch(accessTokenUrl, {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
     },
-  );
+    body,
+  });
   const data: {
     token_type: "Bearer";
     expires_in: number;
     access_token: string;
   } = await res.json();
   return data;
+}
+
+async function poll<T>(fn: (i: number) => Promise<T>, maxRetry = 10) {
+  for (let i = 0; i < maxRetry; i += 1) {
+    await delay(1000 + i * 2000);
+    const result = await fn(i);
+    if (result) return result;
+  }
 }
 
 class Publisher {
@@ -109,14 +114,6 @@ class Publisher {
     });
     if (!res.ok) throw res;
     return res;
-  }
-
-  private async poll<T>(fn: (i: number) => Promise<T>) {
-    for (let i = 0; i < 10; i += 1) {
-      await delay(1000 + i * 2000);
-      const result = await fn(i);
-      if (result) return result;
-    }
   }
 
   async upload(zipFile: string | Blob) {
@@ -152,7 +149,7 @@ class Publisher {
   async uploadResult(zipFile: string | Blob) {
     const operationId = await this.upload(zipFile);
     if (
-      !(await this.poll((i) => {
+      !(await poll((i) => {
         console.log("Check upload:", operationId, i || "");
         return this.checkUpload(operationId);
       }))
@@ -193,7 +190,7 @@ class Publisher {
   async publishResult() {
     const operationId = await this.publish();
     if (
-      !(await this.poll((i) => {
+      !(await poll((i) => {
         console.log("Check publish:", operationId, i || "");
         return this.checkPublish(operationId);
       }))
