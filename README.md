@@ -9,7 +9,7 @@ it first.
 
 Log in to
 <https://partner.microsoft.com/en-us/dashboard/microsoftedge/publishapi> to get
-your `CLIENT_ID`, `CLIENT_SECRET` and `ACCESS_TOKEN_URL`.
+your `CLIENT_ID` and `API_KEY`.
 
 Then navigate to the overview page of your extension, you will see `PRODUCT_ID`
 at the bottom.
@@ -18,9 +18,8 @@ Create a `.env` file with the required environment variables:
 
 ```env
 # Required
-ACCESS_TOKEN_URL = 'your_access_token_url'
 CLIENT_ID = 'your_client_id'
-CLIENT_SECRET = 'your_client_secret'
+API_KEY = 'your_api_key'
 PRODUCT_ID = 'your_product_id'
 
 # Optional
