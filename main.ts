@@ -13,9 +13,8 @@ $ ./publish-edge-addon.ts <zip-file-to-publish>
 
 Options:
 
---accessTokenUrl <accessTokenUrl>  Defaults to \`$ACCESS_TOKEN_URL\`.
 --clientId <clientId>              Defaults to \`$CLIENT_ID\`.
---clientSecret <clientSecret>      Defaults to \`$CLIENT_SECRET\`.
+--apiKey <apiKey>                  Defaults to \`$API_KEY\`.
 --productId <productId>            Defaults to \`$PRODUCT_ID\`.
 --notes <notes>                    Set notes for reviewers. Defaults to \`$NOTES\`.
 `;
@@ -24,24 +23,19 @@ await load({ export: true });
 
 const args = parseArgs(Deno.args);
 
-const accessTokenUrl = args.accessTokenUrl || Deno.env.get("ACCESS_TOKEN_URL");
 const clientId = args.clientId || Deno.env.get("CLIENT_ID");
-const clientSecret = args.clientSecret || Deno.env.get("CLIENT_SECRET");
+const apiKey = args.apiKey || Deno.env.get("API_KEY");
 const productId = args.productId || Deno.env.get("PRODUCT_ID");
 const notes = args.notes || Deno.env.get("NOTES") || "";
 const distFile = args._[0] as string;
 
 let error = false;
-if (!accessTokenUrl) {
-  console.error("ACCESS_TOKEN_URL is required!");
-  error = true;
-}
 if (!clientId) {
   console.error("CLIENT_ID is required!");
   error = true;
 }
-if (!clientSecret) {
-  console.error("CLIENT_SECRET is required!");
+if (!apiKey) {
+  console.error("API_KEY is required!");
   error = true;
 }
 if (!productId) {
@@ -68,28 +62,6 @@ interface Operation {
   errorCode: string;
 }
 
-async function getToken() {
-  const body = new URLSearchParams([
-    ["scope", `${endpoint}/.default`],
-    ["grant_type", "client_credentials"],
-    ["client_id", clientId],
-    ["client_secret", clientSecret],
-  ]);
-  const res = await fetch(accessTokenUrl, {
-    method: "POST",
-    headers: {
-      "content-type": "application/x-www-form-urlencoded",
-    },
-    body,
-  });
-  const data: {
-    token_type: "Bearer";
-    expires_in: number;
-    access_token: string;
-  } = await res.json();
-  return data;
-}
-
 async function poll<T>(fn: (i: number) => Promise<T>, maxRetry = 10) {
   for (let i = 0; i < maxRetry; i += 1) {
     await delay(1000 + i * 2000);
@@ -99,20 +71,21 @@ async function poll<T>(fn: (i: number) => Promise<T>, maxRetry = 10) {
 }
 
 class Publisher {
-  private token = "";
-
   constructor(private productId: string) {}
 
   private async request(path: string, opts?: RequestInit) {
-    if (!this.token) this.token = (await getToken()).access_token;
     const res = await fetch(`${endpoint}${path}`, {
       ...opts,
       headers: {
         ...opts?.headers,
-        authorization: `Bearer ${this.token}`,
+        authorization: `ApiKey ${apiKey}`,
+        "X-ClientID": clientId,
       },
     });
-    if (!res.ok) throw res;
+    if (!res.ok) {
+      const text = await res.text();
+      throw { status: res.status, text };
+    }
     return res;
   }
 
